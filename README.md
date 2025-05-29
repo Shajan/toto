@@ -115,6 +115,10 @@ lower_quantile = forecast.quantile(0.1)  # 10th percentile for lower confidence 
 upper_quantile = forecast.quantile(0.9)  # 90th percentile for upper confidence bound
 ```
 
+For a self-contained script that reads closing prices from a CSV file and
+produces forecasts for multiple stocks, see
+[`examples/stock_price_forecast.py`](examples/stock_price_forecast.py).
+
 ### Tutorials
 
 For a comprehensive guide on using Toto for time series forecasting, check out our tutorial notebooks:
