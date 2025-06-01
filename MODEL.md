@@ -31,6 +31,49 @@ The Toto model takes a `MaskedTimeseries` object as input, which contains:
 - Sampling frequency of each variate in seconds
 - Purpose: Informs the model about the temporal resolution of each variate, enabling proper handling of mixed-frequency data where different metrics are sampled at different rates
 
+## Mixed-Frequency Support
+
+The model supports variates with different sampling frequencies through the combination of `time_interval_seconds` and `input_padding_mask`:
+
+**Example**: Monitoring system with 1-minute CPU metrics and 5-minute memory metrics
+```python
+# CPU sampled every 60s, Memory every 300s
+time_interval_seconds = torch.tensor([[60, 300]])
+
+# CPU data: all positions valid (high frequency)
+inputs[0, 0, :] = [cpu_0, cpu_1, cpu_2, cpu_3, cpu_4, cpu_5, ...]
+padding_mask[0, 0, :] = [True, True, True, True, True, True, ...]
+
+# Memory data: only every 5th position valid (low frequency)  
+inputs[0, 1, :] = [mem_0, 0, 0, 0, 0, mem_5, ...]
+padding_mask[0, 1, :] = [True, False, False, False, False, True, ...]
+```
+
+This allows the model to learn appropriate temporal relationships despite different sampling rates, with attention mechanisms properly weighting available data while ignoring padded positions.
+
+## Variate Grouping for Space-wise Attention
+
+The `id_mask` enables grouping of related variates so that space-wise attention operates within logical groups:
+
+**Example**: Monitoring two separate servers
+```python
+# 4 variates: CPU+Memory for Server A, CPU+Memory for Server B
+id_mask = torch.tensor([[0, 0, 1, 1]])  # shape: (1, 4, 1)
+
+# Server A: CPU and Memory can attend to each other
+# Server B: CPU and Memory can attend to each other  
+# But Server A metrics cannot attend to Server B metrics
+
+# Results in block attention mask:
+# Variate:  A_CPU  A_Mem  B_CPU  B_Mem
+# A_CPU   [  ✓     ✓      ✗      ✗   ]
+# A_Mem   [  ✓     ✓      ✗      ✗   ] 
+# B_CPU   [  ✗     ✗      ✓      ✓   ]
+# B_Mem   [  ✗     ✗      ✓      ✓   ]
+```
+
+This prevents interference between unrelated systems while allowing the model to learn cross-metric relationships within each logical group.
+
 ## Core Architecture
 
 **Patch-Based Processing**: Converts time series into overlapping patches (default patch_size=16, stride=8) for efficient processing
