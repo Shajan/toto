@@ -50,11 +50,11 @@ time_interval_seconds = torch.tensor([[60, 120]])
 
 # Time grid (minutes):     0    1    2    3    4
 # CPU data (variate 0): 5 samples (every minute) - all positions valid
-inputs[0, 0, :] = [cpu_0, cpu_1, cpu_2, cpu_3, cpu_4]
+inputs[0, 0, :] = [cpu_t0, cpu_t1, cpu_t2, cpu_t3, cpu_t4]
 padding_mask[0, 0, :] = [True, True, True, True, True]
 
 # Memory data (variate 1): 3 samples (every 2 minutes at positions 0, 2, 4)  
-inputs[0, 1, :] = [mem_0, 0, mem_2, 0, mem_4]
+inputs[0, 1, :] = [mem_t0, 0, mem_t2, 0, mem_t4]
 padding_mask[0, 1, :] = [True, False, True, False, True]
 ```
 
