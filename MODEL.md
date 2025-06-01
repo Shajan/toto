@@ -35,20 +35,27 @@ The Toto model takes a `MaskedTimeseries` object as input, which contains:
 
 The model supports variates with different sampling frequencies through the combination of `time_interval_seconds` and `input_padding_mask`:
 
-**Example**: Monitoring system with 1-minute CPU metrics and 5-minute memory metrics
+- `time_interval_seconds` specifies the **sampling frequency** (interval between samples) for each variate
+- `input_padding_mask` indicates which positions contain valid data vs. padding when variates are aligned to a common time grid
+- The number of actual samples depends on the total time series length and alignment strategy
+
+**Example**: Monitoring system with 1-minute CPU metrics and 2-minute memory metrics over 4 minutes
 ```python
-# Variate 0: CPU sampled every 60s, Variate 1: Memory sampled every 300s
-time_interval_seconds = torch.tensor([[60, 300]])
+# Sampling frequencies: CPU every 60s, Memory every 120s
+time_interval_seconds = torch.tensor([[60, 120]])
 #                                     ^    ^
 #                                   CPU  Memory
+#                                 every every  
+#                                  60s  120s
 
-# CPU data (variate 0): all positions valid (high frequency)
-inputs[0, 0, :] = [cpu_0, cpu_1, cpu_2, cpu_3, cpu_4, cpu_5, ...]
-padding_mask[0, 0, :] = [True, True, True, True, True, True, ...]
+# Time grid (minutes):     0    1    2    3    4
+# CPU data (variate 0): 5 samples (every minute) - all positions valid
+inputs[0, 0, :] = [cpu_0, cpu_1, cpu_2, cpu_3, cpu_4]
+padding_mask[0, 0, :] = [True, True, True, True, True]
 
-# Memory data (variate 1): only every 5th position valid (low frequency)  
-inputs[0, 1, :] = [mem_0, 0, 0, 0, 0, mem_5, ...]
-padding_mask[0, 1, :] = [True, False, False, False, False, True, ...]
+# Memory data (variate 1): 3 samples (every 2 minutes at positions 0, 2, 4)  
+inputs[0, 1, :] = [mem_0, 0, mem_2, 0, mem_4]
+padding_mask[0, 1, :] = [True, False, True, False, True]
 ```
 
 This allows the model to learn appropriate temporal relationships despite different sampling rates, with attention mechanisms properly weighting available data while ignoring padded positions.
