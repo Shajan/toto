@@ -37,14 +37,16 @@ The model supports variates with different sampling frequencies through the comb
 
 **Example**: Monitoring system with 1-minute CPU metrics and 5-minute memory metrics
 ```python
-# CPU sampled every 60s, Memory every 300s
+# Variate 0: CPU sampled every 60s, Variate 1: Memory sampled every 300s
 time_interval_seconds = torch.tensor([[60, 300]])
+#                                     ^    ^
+#                                   CPU  Memory
 
-# CPU data: all positions valid (high frequency)
+# CPU data (variate 0): all positions valid (high frequency)
 inputs[0, 0, :] = [cpu_0, cpu_1, cpu_2, cpu_3, cpu_4, cpu_5, ...]
 padding_mask[0, 0, :] = [True, True, True, True, True, True, ...]
 
-# Memory data: only every 5th position valid (low frequency)  
+# Memory data (variate 1): only every 5th position valid (low frequency)  
 inputs[0, 1, :] = [mem_0, 0, 0, 0, 0, mem_5, ...]
 padding_mask[0, 1, :] = [True, False, False, False, False, True, ...]
 ```
