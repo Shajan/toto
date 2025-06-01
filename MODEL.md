@@ -2,6 +2,32 @@
 
 Toto is a decoder-only transformer designed for multivariate time series forecasting with these key architectural features:
 
+## Model Input
+
+The Toto model takes a `MaskedTimeseries` object as input, which contains:
+
+**1. inputs** (`series`):
+- Shape: `(batch, variates, series_len)`  
+- The actual numerical time series values
+
+**2. input_padding_mask** (`padding_mask`):
+- Shape: `(batch, variates, series_len)`
+- Boolean mask where `True` = valid data, `False` = padding
+- Handles variable-length sequences
+
+**3. id_mask** (`id_mask`):
+- Shape: `(batch, variates, series_len)` or `(batch, variates, 1)`
+- Integer IDs grouping related variates for multivariate attention
+- Variates with same ID can attend to each other in space-wise layers
+
+**4. Timestamps** (`timestamp_seconds`):
+- Shape: `(batch, variates, series_len)`
+- POSIX timestamps in seconds for temporal awareness
+
+**5. Time Intervals** (`time_interval_seconds`):
+- Shape: `(batch, variates)`
+- Sampling frequency of each variate in seconds
+
 ## Core Architecture
 
 **Patch-Based Processing**: Converts time series into overlapping patches (default patch_size=16, stride=8) for efficient processing
@@ -35,4 +61,4 @@ Toto is a decoder-only transformer designed for multivariate time series forecas
 
 **Zero-shot Capability**: No fine-tuning required for new time series domains
 
-The model processes shape `(batch, variates, time_steps)` and outputs probabilistic distributions enabling median/quantile forecasts with uncertainty bounds.
+The model automatically handles padding to make series length divisible by patch stride, and applies scaling before patch embedding and transformer processing. It outputs probabilistic distributions enabling median/quantile forecasts with uncertainty bounds.
