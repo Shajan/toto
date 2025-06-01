@@ -85,22 +85,69 @@ This prevents interference between unrelated systems while allowing the model to
 
 ## Core Architecture
 
-**Patch-Based Processing**: Converts time series into overlapping patches (default patch_size=16, stride=8) for efficient processing
+Toto is a decoder-only transformer that processes time series through three key innovations:
 
-**Alternating Attention Pattern**: 
-- **Time-wise attention**: Learns temporal dependencies within each variate
-- **Space-wise attention**: Learns cross-variate dependencies
-- Configurable ratio (e.g., 3 time-wise layers per 1 space-wise layer)
+### 1. Patch-Based Processing
+Instead of processing individual time steps, the model groups consecutive points into overlapping patches:
+- **patch_size=16**: Each patch contains 16 time steps
+- **stride=8**: New patch every 8 steps (50% overlap)
+- **Result**: 32 time steps become 3 patches, reducing sequence length 8x
 
-**Pre-norm Transformer**: LayerNorm applied before each sublayer (attention + feedforward) rather than after
+This makes attention computation much more efficient while preserving temporal information through overlapping patches.
+
+### 2. Dual Attention System
+The transformer alternates between two types of layers:
+- **TIME layers**: Learn temporal patterns (how each variate evolves over time)
+- **SPACE layers**: Learn cross-variate relationships (how different metrics relate at the same time)
+
+The ratio is configurable - for example, 3 TIME layers followed by 1 SPACE layer, repeating throughout the stack.
+
+### 3. Pre-norm Architecture
+LayerNorm is applied before each attention and feedforward sublayer (rather than after), following modern transformer designs for better training stability.
+
+**Key Insight**: By alternating between temporal and cross-variate attention, the model learns both how individual metrics change over time and how different metrics influence each other - essential for multivariate forecasting.
 
 ## Key Components
 
 **Embedding Layer**: PatchEmbedding converts time series patches into latent representations
 
-**Transformer Stack**: Multiple layers alternating between:
-- TimeWiseMultiheadAttention (causal, with rotary position encoding)  
-- SpaceWiseMultiheadAttention (non-causal, for cross-variate relationships)
+**Transformer Stack**: Multiple layers alternating between two attention types:
+
+### Layer Types vs Attention Heads
+
+**Layer Types** (what the pattern `[TIME, TIME, TIME, SPACE, ...]` refers to):
+- **TIME layers**: Transformer layers that apply attention across the time dimension
+- **SPACE layers**: Transformer layers that apply attention across the variate dimension  
+- Each layer type determines which dimension the attention mechanism operates over
+
+**Attention Heads** (different concept):
+- Within each layer, there are multiple attention heads (controlled by `num_heads` parameter)
+- All heads in a TIME layer attend across time steps
+- All heads in a SPACE layer attend across variates
+- Example: A TIME layer with `num_heads=8` has 8 attention heads, all attending temporally
+
+### Time-wise Multi-Head Attention
+- **Purpose**: Learns temporal dependencies within each variate
+- **Mechanism**: Causal attention over the time dimension
+- **Implementation**: Flattens variates along batch dimension, applies attention across time steps
+- **Features**:
+  - Causal masking (can only attend to past/current time steps)
+  - Rotary position embeddings for relative temporal positioning
+  - KV caching support for efficient autoregressive inference
+
+### Space-wise Multi-Head Attention  
+- **Purpose**: Learns cross-variate relationships at the same time point
+- **Mechanism**: Bidirectional attention over the variate dimension
+- **Implementation**: Flattens time steps along batch dimension, applies attention across variates
+- **Features**:
+  - Non-causal (can attend to all variates)
+  - No rotary embeddings (invariant to variate ordering)
+  - Controlled by `id_mask` for grouping related variates
+
+### Attention Implementation Details
+- **Memory Efficiency**: Optional xFormers memory-efficient attention for large sequences
+- **Multi-head**: Each layer uses multiple attention heads (`num_heads` parameter)
+- **Unified Architecture**: Both attention types share the same base implementation with different axis configurations
 
 **Feed-Forward Networks**: SwiGLU activation (Swish + Gated Linear Unit) for improved performance
 
