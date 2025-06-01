@@ -9,24 +9,27 @@ The Toto model takes a `MaskedTimeseries` object as input, which contains:
 **1. inputs** (`series`):
 - Shape: `(batch, variates, series_len)`  
 - The actual numerical time series values
+- Purpose: Provides the core data that the model learns temporal and cross-variate patterns from
 
 **2. input_padding_mask** (`padding_mask`):
 - Shape: `(batch, variates, series_len)`
 - Boolean mask where `True` = valid data, `False` = padding
-- Handles variable-length sequences
+- Purpose: Enables efficient batching of variable-length sequences by indicating which positions contain real data versus padding, ensuring the model doesn't learn from artificial padding values
 
 **3. id_mask** (`id_mask`):
 - Shape: `(batch, variates, series_len)` or `(batch, variates, 1)`
 - Integer IDs grouping related variates for multivariate attention
-- Variates with same ID can attend to each other in space-wise layers
+- Purpose: Allows the model to learn cross-variate relationships within logical groups while preventing interference between unrelated time series. Creates block masks during space-wise attention so variates with the same ID can attend to each other
 
 **4. Timestamps** (`timestamp_seconds`):
 - Shape: `(batch, variates, series_len)`
 - POSIX timestamps in seconds for temporal awareness
+- Purpose: Provides absolute temporal context that helps the model understand seasonal patterns, time-of-day effects, and long-term trends beyond just relative sequence positions
 
 **5. Time Intervals** (`time_interval_seconds`):
 - Shape: `(batch, variates)`
 - Sampling frequency of each variate in seconds
+- Purpose: Informs the model about the temporal resolution of each variate, enabling proper handling of mixed-frequency data where different metrics are sampled at different rates
 
 ## Core Architecture
 
