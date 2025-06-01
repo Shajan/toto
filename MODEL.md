@@ -43,10 +43,10 @@ The model supports variates with different sampling frequencies through the comb
 ```python
 # Sampling frequencies: CPU every 60s, Memory every 120s
 time_interval_seconds = torch.tensor([[60, 120]])
-#                                     ^    ^
-#                                   CPU  Memory
-#                                 every every  
-#                                  60s  120s
+#                                      ^     ^
+#                                     CPU  Memory
+#                                    every every  
+#                                     60s  120s
 
 # Time grid (minutes):     0    1    2    3    4
 # CPU data (variate 0): 5 samples (every minute) - all positions valid
@@ -102,8 +102,16 @@ The transformer alternates between two types of layers:
 
 The ratio is configurable - for example, 3 TIME layers followed by 1 SPACE layer, repeating throughout the stack.
 
-### 3. Pre-norm Architecture
-LayerNorm is applied before each attention and feedforward sublayer (rather than after), following modern transformer designs for better training stability.
+### 3. Pre-norm Architecture with Residual Connections
+Each transformer layer uses a pre-norm design with residual connections:
+- **Pre-norm**: LayerNorm applied before each sublayer (rather than after)
+- **Residual connections**: Skip connections around both attention and feedforward sublayers
+- **Pattern**: `Input → LayerNorm → Attention → Add → LayerNorm → MLP → Add → Output`
+
+The residual connections enable:
+- **Gradient flow**: Direct paths for gradients during backpropagation
+- **Training stability**: Enables training of deep transformer stacks
+- **Feature preservation**: Lower-level features can combine with higher-level representations
 
 **Key Insight**: By alternating between temporal and cross-variate attention, the model learns both how individual metrics change over time and how different metrics influence each other - essential for multivariate forecasting.
 
@@ -163,4 +171,68 @@ LayerNorm is applied before each attention and feedforward sublayer (rather than
 
 **Zero-shot Capability**: No fine-tuning required for new time series domains
 
-The model automatically handles padding to make series length divisible by patch stride, and applies scaling before patch embedding and transformer processing. It outputs probabilistic distributions enabling median/quantile forecasts with uncertainty bounds.
+The model automatically handles padding to make series length divisible by patch stride, and applies scaling before patch embedding and transformer processing.
+
+## Model Output
+
+### Model Raw Output
+
+The Toto model's `forward()` method returns a `TotoOutput` object containing:
+
+1. **`distribution`**: A PyTorch Distribution object (e.g., Student-T or mixture) representing forecast uncertainty
+2. **`loc`**: Location parameters for scaling back to original values - shape `(batch, variate)`  
+3. **`scale`**: Scale parameters for scaling back to original values - shape `(batch, variate)`
+
+### Forecaster Output
+
+The `TotoForecaster` converts the raw model output into a user-friendly `Forecast` object:
+
+1. **`mean`**: Mean predictions - shape `(batch, variate, future_time_steps)`
+2. **`samples`**: Optional probabilistic samples - shape `(batch, variate, future_time_steps, samples)`
+
+### Probabilistic Distributions
+
+The model outputs probabilistic distributions rather than point predictions:
+
+**Single Student-T Distribution**:
+```python
+distribution = torch.distributions.StudentT(
+    df=tensor([[2.5, 3.1, 2.8]]),      # degrees of freedom  
+    loc=tensor([[0.0, 0.1, -0.2]]),    # location parameter
+    scale=tensor([[1.2, 0.8, 1.5]])    # scale parameter
+)
+```
+
+**Mixture of Student-T Distributions**:
+```python
+distribution = torch.distributions.MixtureSameFamily(
+    mixture_distribution=Categorical(...),   # mixing weights
+    component_distribution=StudentT(...)     # k_components Student-T distributions
+)
+```
+
+**Distribution Capabilities**:
+- `distribution.sample()` - Generate random forecast samples
+- `distribution.mean` - Get mean predictions
+- `distribution.log_prob(x)` - Compute probability of observed values
+- `distribution.cdf(x)` - Cumulative distribution function
+
+### Example Output Structure
+
+```python
+# Forecast object for 2 variates, 3 future time steps
+forecast = Forecast(
+    mean=tensor([[0.5, 0.6, 0.7],      # variate 0 predictions (e.g., CPU)
+                 [2.1, 2.3, 2.0]]),    # variate 1 predictions (e.g., Memory)  
+    samples=tensor([[[...], [...], [...]], # 256 samples per prediction
+                    [[...], [...], [...]]])
+)
+
+# Access specific predictions
+cpu_predictions = forecast.mean[0, 0, :]  # batch 0, variate 0
+memory_predictions = forecast.mean[0, 1, :]  # batch 0, variate 1
+confidence_intervals = forecast.quantile([0.1, 0.9])  # 80% confidence interval
+median_forecast = forecast.median  # Median predictions (often more accurate than mean)
+```
+
+**Key Benefits**: The probabilistic output enables uncertainty quantification, confidence intervals, risk assessment, and multiple scenario generation - essential for robust time series forecasting.
